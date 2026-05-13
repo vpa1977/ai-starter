@@ -60,7 +60,7 @@ public class CollectLicenseCommand {
         Map<String, List<String>> licenseMap = new LinkedHashMap<>();
         Map<String, String> originalLicenseMap = new LinkedHashMap<>();
         List<String> noLicenseFiles = new ArrayList<>();
-
+        var total = files.size();
         while (!files.isEmpty()) {
             var filePath = files.remove(0);
             System.err.println("Processing: " + filePath);
@@ -98,7 +98,7 @@ public class CollectLicenseCommand {
 
         StringBuilder summary = new StringBuilder();
         summary.append("License scan results for: ").append(path).append("\n");
-        summary.append("Files scanned: ").append(files.size()).append("\n");
+        summary.append("Files scanned: ").append(total).append("\n");
         summary.append("Distinct licenses: ").append(licenseMap.size()).append("\n");
         summary.append("Files without license: ").append(noLicenseFiles.size()).append("\n\n");
 
@@ -124,7 +124,7 @@ public class CollectLicenseCommand {
     }
 
     private String normalizeLicense(String licenseText) {
-        return licenseText.replaceAll("[^a-zA-Z]", "");
+        return licenseText.replaceAll("[^a-zA-Z0-9]", "");
     }
 
     private String isExistingLicense(String content, Map<String, List<String>> licenseMap) {
