@@ -1,0 +1,18 @@
+1778661721850:who are you
+1778661733384:check-license
+1778661742522:check-license --path .
+1778661962730:help
+1778661968211:check-license --path .
+1778662282268:check-license --path /home/pushkarnk/work/stonking/sprint/zig0.15
+1778662302024:check-license --path /home/pushkar/work/stonking/sprint/zig0.15
+1778663681703:check-license --path /home/pushkar/work/stonking/sprint/zig0.15 --recursive
+1778663901020:help
+1778663911633:chat who are you
+1778663920346:chat --message "who are you"
+1778663937620:check-license --path /home/pushkar/work/stonking/sprint/zig0.15 --recursive
+1778664344907:chat --message "What happened with the previous command?"
+1778664464506:check-license --path /home/pushkar/work/stonking/sprint/zig0.15 --recursive
+1778664868909:quit
+1778664892796:check-license --path /home/pushkar/work/stonking/sprint/zig0.15 --recursive
+1778664921397:quit
+1778664938473:check-license --path /home/pushkar/work/stonking/sprint/zig0.15 --recursive
