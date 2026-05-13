@@ -16,3 +16,4 @@
 1778664892796:check-license --path /home/pushkar/work/stonking/sprint/zig0.15 --recursive
 1778664921397:quit
 1778664938473:check-license --path /home/pushkar/work/stonking/sprint/zig0.15 --recursive
+1778671153282:check-license --path /home/pushkar/work/stonking/sprint/zig0.15 --recursive --verbose

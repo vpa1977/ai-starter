@@ -20,10 +20,12 @@ public class CheckLicenseCommand {
             @Option(shortName = 'p', longName = "path", description = "Path to the source directory or file to check", required = true)
             String path,
             @Option(shortName = 'r', longName = "recursive", description = "Recursively check subdirectories")
-            boolean recursive) {
+            boolean recursive,
+            @Option(shortName = 'v', longName = "verbose", description = "Stream full output of every command the agent runs")
+            boolean verbose) {
 
         String request = "Audit license headers under: " + path
                 + (recursive ? " (recurse into subdirectories)" : " (top-level only)");
-        return agent.run(request);
+        return agent.run(request, verbose);
     }
 }
