@@ -1,0 +1,11 @@
+Elastic-2.0
+SSPL-1.0
+BUSL-1.1
+BSL-1.1
+PolyForm-Noncommercial-1.0.0
+PolyForm-Small-Business-1.0.0
+FSL-1.1-MIT
+FSL-1.1-ALv2
+Confluent-1.0
+Redis-BSL-1.1
+SUL-1.0
