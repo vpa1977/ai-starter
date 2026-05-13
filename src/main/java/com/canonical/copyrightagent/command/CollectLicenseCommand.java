@@ -29,7 +29,7 @@ public class CollectLicenseCommand {
     private final ChatClient chatClient;
 
     private record LicenseInfo(String text, String holders, String years) {}
-
+    private record LicensedFiles(LicenseInfo info, ArrayList<String> files) {}
     public CollectLicenseCommand(ModelService service) {
         var model = service.createModel("openai/gpt-oss-20b");
         ChatMemory chatMemory = MessageWindowChatMemory.builder().build();
@@ -57,8 +57,7 @@ public class CollectLicenseCommand {
             return "No files found in: " + path;
         }
 
-        Map<String, List<String>> licenseMap = new LinkedHashMap<>();
-        Map<String, String> originalLicenseMap = new LinkedHashMap<>();
+        Map<String, LicensedFiles> licenseMap = new LinkedHashMap<>();
         List<String> noLicenseFiles = new ArrayList<>();
         var total = files.size();
         while (!files.isEmpty()) {
@@ -80,7 +79,7 @@ public class CollectLicenseCommand {
 
             var exitingLicense = isExistingLicense(content, licenseMap);
             if (exitingLicense != null) {
-                licenseMap.get(exitingLicense).add(filePath.toString());
+                licenseMap.get(exitingLicense).files().add(filePath.toString());
                 continue;
             }
 
@@ -91,8 +90,7 @@ public class CollectLicenseCommand {
                 noLicenseFiles.add(filePath.toString());
             } else {
                 String normalizedKey = normalizeLicense(licenseText);
-                originalLicenseMap.putIfAbsent(normalizedKey, licenseText);
-                licenseMap.computeIfAbsent(normalizedKey, k -> new ArrayList<>()).add(filePath.toString());
+                licenseMap.computeIfAbsent(normalizedKey, k -> new LicensedFiles(licenseInfo, new ArrayList<>())).files().add(filePath.toString());
             }
         }
 
@@ -103,11 +101,18 @@ public class CollectLicenseCommand {
         summary.append("Files without license: ").append(noLicenseFiles.size()).append("\n\n");
 
         int licenseIdx = 1;
-        for (Map.Entry<String, List<String>> entry : licenseMap.entrySet()) {
-            summary.append("--- License #").append(licenseIdx++).append(" (").append(entry.getValue().size()).append(" files) ---\n");
-            summary.append(originalLicenseMap.getOrDefault(entry.getKey(), entry.getKey())).append("\n");
+        for (Map.Entry<String, LicensedFiles> entry : licenseMap.entrySet()) {
+            LicensedFiles lf = entry.getValue();
+            summary.append("--- License #").append(licenseIdx++).append(" (").append(lf.files().size()).append(" files) ---\n");
+            summary.append(lf.info().text()).append("\n");
+            if (lf.info().holders() != null && !lf.info().holders().isBlank()) {
+                summary.append("Holders: ").append(lf.info().holders()).append("\n");
+            }
+            if (lf.info().years() != null && !lf.info().years().isBlank()) {
+                summary.append("Years: ").append(lf.info().years()).append("\n");
+            }
             summary.append("Files:\n");
-            for (String f : entry.getValue()) {
+            for (String f : lf.files()) {
                 summary.append("  ").append(f).append("\n");
             }
             summary.append("\n");
@@ -127,7 +132,7 @@ public class CollectLicenseCommand {
         return licenseText.replaceAll("[^a-zA-Z0-9]", "");
     }
 
-    private String isExistingLicense(String content, Map<String, List<String>> licenseMap) {
+    private String isExistingLicense(String content, Map<String, LicensedFiles> licenseMap) {
         String normalizedContent = normalizeLicense(content);
         for (String key : licenseMap.keySet()) {
             if (normalizedContent.contains(key)) {
