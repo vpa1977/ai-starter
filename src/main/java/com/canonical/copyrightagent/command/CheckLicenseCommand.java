@@ -26,4 +26,6 @@ public class CheckLicenseCommand {
         var content = chatClient.prompt("Say hi").call().content();
         return "The client said: "+ content;
     }
+
+
 }

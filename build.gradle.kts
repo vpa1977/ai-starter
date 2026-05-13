@@ -24,6 +24,7 @@ dependencies {
 	implementation("org.springframework.ai:spring-ai-starter-model-openai")
 	implementation("org.springframework.boot:spring-boot-starter")
 	implementation("org.springframework.boot:spring-boot-starter-webflux")
+	implementation("org.springframework.ai:spring-ai-starter-mcp-server-webmvc")
 	implementation("org.springframework.shell:spring-shell-starter-jna")
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testImplementation("org.springframework.shell:spring-shell-test")
