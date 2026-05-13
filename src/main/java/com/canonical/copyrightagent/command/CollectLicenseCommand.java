@@ -28,7 +28,7 @@ public class CollectLicenseCommand {
 
     private final ChatClient chatClient;
 
-    private record LicenseInfo(String text, String holders, String years) {}
+    private record LicenseInfo(String text, String holders, String years, boolean full) {}
     private record LicensedFiles(LicenseInfo info, ArrayList<String> files) {}
     public CollectLicenseCommand(ModelService service) {
         var model = service.createModel("openai/gpt-oss-20b");
@@ -100,6 +100,7 @@ public class CollectLicenseCommand {
         summary.append("Distinct licenses: ").append(licenseMap.size()).append("\n");
         summary.append("Files without license: ").append(noLicenseFiles.size()).append("\n\n");
 
+        List<String> fullLicenseFiles = new ArrayList<>();
         int licenseIdx = 1;
         for (Map.Entry<String, LicensedFiles> entry : licenseMap.entrySet()) {
             LicensedFiles lf = entry.getValue();
@@ -113,6 +114,17 @@ public class CollectLicenseCommand {
             }
             summary.append("Files:\n");
             for (String f : lf.files()) {
+                summary.append("  ").append(f).append("\n");
+            }
+            summary.append("\n");
+            if (lf.info().full()) {
+                fullLicenseFiles.addAll(lf.files());
+            }
+        }
+
+        if (!fullLicenseFiles.isEmpty()) {
+            summary.append("--- Full License Files (").append(fullLicenseFiles.size()).append(" files) ---\n");
+            for (String f : fullLicenseFiles) {
                 summary.append("  ").append(f).append("\n");
             }
             summary.append("\n");
@@ -148,6 +160,7 @@ public class CollectLicenseCommand {
                     Examine the file and return the license text verbatim including copyright statement.
                     When asked HOLDERS, Examine the file and return the copyright holders.
                     When asked DATES, Examine the file and return the copyright dates.
+                    When asked FULL, answer YES if the file contains ONLY a license (no other code or content), NO otherwise.
                     Return empty text if no license is found.
                     Do not add any explanation, commentary or unrelated markup.
                     File:
@@ -157,7 +170,7 @@ public class CollectLicenseCommand {
                 .call().chatResponse();
         var license = chatResponse.getResult().getOutput().getText();
         if (license == null) {
-            return new LicenseInfo(null, null, null);
+            return new LicenseInfo(null, null, null, false);
         }
         chatResponse = chatClient.prompt().user("HOLDERS")
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
@@ -167,7 +180,12 @@ public class CollectLicenseCommand {
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
                 .call().chatResponse();
         var dates = chatResponse.getResult().getOutput().getText();
+        chatResponse = chatClient.prompt().user("FULL")
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
+                .call().chatResponse();
+        var fullText = chatResponse.getResult().getOutput().getText();
+        boolean full = fullText != null && fullText.strip().toUpperCase().startsWith("YES");
 
-        return new LicenseInfo(license, holders, dates);
+        return new LicenseInfo(license, holders, dates, full);
     }
 }
