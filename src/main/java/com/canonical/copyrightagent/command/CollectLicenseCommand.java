@@ -1,11 +1,16 @@
 package com.canonical.copyrightagent.command;
 
+import com.canonical.copyrightagent.service.CommentExtractor;
+import com.canonical.copyrightagent.service.CommentExtractorImpl;
 import com.canonical.copyrightagent.service.ModelService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.shell.core.command.annotation.Command;
 import org.springframework.shell.core.command.annotation.Option;
 import org.springframework.stereotype.Component;
@@ -13,6 +18,7 @@ import org.springframework.stereotype.Component;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.IOException;
+import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -24,18 +30,150 @@ import java.util.stream.Stream;
 @Component
 public class CollectLicenseCommand {
 
+
+    @Autowired
+    private CommentExtractor extractor;
+
     private static final int MAX_CONTENT_BYTES = 8192;
 
     private final ChatClient chatClient;
+    private final int MAX_LICENSE_LENGTH = 32 * 1024;
 
     private record LicenseInfo(String text, String holders, String years, boolean full) {}
     private record LicensedFiles(LicenseInfo info, ArrayList<String> files) {}
     public CollectLicenseCommand(ModelService service) {
-        var model = service.createModel("openai/gpt-oss-20b");
+        //var model = service.createModel("liquid/lfm-2-24b-a2b");
+        //var model = service.createModel("meta-llama/llama-3.1-8b-instruct");
+        var model = service.createModel("google/gemma-4-e4b");
+        //var model = service.createModel("nvidia/nemotron-3-nano-4b");
         ChatMemory chatMemory = MessageWindowChatMemory.builder().build();
 
         chatClient = ChatClient.builder(model)
-                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+                .defaultSystem("""
+                        # Your task
+                        Find full license text, copyright holders, copyright years from user prompt.
+                        if license not found:
+                        - Answer NO
+                        if license found:
+                        - Answer with yaml:
+                        ```yaml
+                        license: |
+                          license-text
+                        holders: |
+                          copyright-holders
+                        years: |
+                          copyright-years
+                        ```
+                        DO NOT ANSWER ANYTHING ELSE
+       
+                        # Examples
+                        ---
+                        
+                        ### Example 1: MIT License Found (Standard Block Comment)
+                        
+                        **User Prompt:**
+                        
+                        ```python
+                        ""\"
+                        Copyright (c) 2024 Jane Doe, John Smith
+                        
+                        Permission is hereby granted, free of charge, to any person obtaining a copy
+                        of this software and associated documentation files (the "Software"), to deal
+                        in the Software without restriction, including without limitation the rights
+                        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+                        copies of the Software.
+                        ""\"
+                        
+                        def add_numbers(a, b):
+                            return a + b
+                        
+                        ```
+                        
+                        **Expected Output:**
+                        
+                        ```yaml
+                        ---
+                        license: |
+                          Permission is hereby granted, free of charge, to any person obtaining a copy
+                          of this software and associated documentation files (the "Software"), to deal
+                          in the Software without restriction, including without limitation the rights
+                          to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+                          copies of the Software.
+                        holders: |
+                          Jane Doe, John Smith
+                        years: |
+                          2024
+                        ---
+                        
+                        ```
+                        
+                        ---
+                        
+                        ### Example 2: No License Found
+                        
+                        **User Prompt:**
+                        
+                        ```javascript
+                        // This function calculates the factorial of a given number
+                        function factorial(n) {
+                            if (n === 0 || n === 1) return 1;
+                            return n * factorial(n - 1);
+                        }
+                        const result = factorial(5);
+                        console.log(result);
+                        
+                        ```
+                        
+                        **Expected Output:**
+                        
+                        ```
+                        NO
+                        
+                        ```
+                        
+                        ---
+                        
+                        ### Example 3: BSD License Found (Inline Comments)
+                        
+                        **User Prompt:**
+                        
+                        ```c
+                        // Copyright (c) 2021-2023 Acme Corporation. All rights reserved.
+                        //\s
+                        // Redistribution and use in source and binary forms, with or without
+                        // modification, are permitted provided that the following conditions are met:
+                        // 1. Redistributions of source code must retain the above copyright notice.
+                        // 2. Redistributions in binary form must reproduce the above copyright notice.
+                        
+                        #include <stdio.h>
+                        int main() {
+                            printf("Hello, World!");
+                            return 0;
+                        }
+                        
+                        ```
+                        
+                        **Expected Output:**
+                        
+                        ```yaml
+                        ---
+                        license: |
+                          Redistribution and use in source and binary forms, with or without
+                          modification, are permitted provided that the following conditions are met:
+                          1. Redistributions of source code must retain the above copyright notice.
+                          2. Redistributions in binary form must reproduce the above copyright notice.
+                        holders: |
+                          Acme Corporation
+                        years: |
+                          2021-2023
+                        ---
+                        
+                        ```                        
+                        Text: 
+                        
+                """)
+                .defaultOptions(OpenAiChatOptions.builder().maxTokens(65536).build())
+                //.defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
                 .build();
     }
 
@@ -155,37 +293,38 @@ public class CollectLicenseCommand {
     }
 
     private LicenseInfo extractLicense(String fileContent) {
-        long  conversationId = System.nanoTime();
-        Prompt p = new Prompt("""
-                    Examine the file and return the license text verbatim including copyright statement.
-                    When asked HOLDERS, Examine the file and return the copyright holders.
-                    When asked DATES, Examine the file and return the copyright dates.
-                    When asked FULL, answer YES if the file contains ONLY a license (no other code or content), NO otherwise.
-                    Return empty text if no license is found.
-                    Do not add any explanation, commentary or unrelated markup.
-                    File:
-                """ + fileContent);
+        StringBuilder sb = new StringBuilder();
+        ArrayList<String> comments = extractor.extractComments(fileContent);
+        if (comments.isEmpty()) {
+            sb.append(fileContent.substring(0, MAX_LICENSE_LENGTH));
+        } else {
+            for (var c : comments) {
+                sb.append(c);
+                sb.append("\n");
+            }
+        }
+           Prompt p =
+                new Prompt(sb.toString());
         var chatResponse = chatClient.prompt(p)
-                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
                 .call().chatResponse();
         var license = chatResponse.getResult().getOutput().getText();
-        if (license == null) {
+        if (license == null || "NO".equals(license) || "\nNO\n".equals(license)) {
             return new LicenseInfo(null, null, null, false);
         }
-        chatResponse = chatClient.prompt().user("HOLDERS")
-                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
-                .call().chatResponse();
-        var holders = chatResponse.getResult().getOutput().getText();
-        chatResponse = chatClient.prompt().user("DATES")
-                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
-                .call().chatResponse();
-        var dates = chatResponse.getResult().getOutput().getText();
-        chatResponse = chatClient.prompt().user("FULL")
-                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
-                .call().chatResponse();
-        var fullText = chatResponse.getResult().getOutput().getText();
-        boolean full = fullText != null && fullText.strip().toUpperCase().startsWith("YES");
-
-        return new LicenseInfo(license, holders, dates, full);
+        license = license.replace("```yaml", "")
+                .replace("```", "")
+                .replace("---", "");
+        try {
+            Map<String, String> ret = new Yaml().load(license);
+            var lic = ret.get("license");
+            String licenseText = ret.get("license");
+            String holderText = ret.get("holders");
+            var yearsText = ret.get("years");
+            boolean full = fileContent.length() - 10 < licenseText.length() + holderText.length() + yearsText.length();
+            return new LicenseInfo(licenseText, holderText, yearsText, full);
+        }
+        catch (Exception e ){
+            return new LicenseInfo(null, null, null, false);
+        }
     }
 }
