@@ -7,7 +7,8 @@ spring:
   ai:
     openai:
       api-key: ${OPENAI_API_KEY}
-      base-url: https://openrouter.ai/api
+      #      base-url: https://openrouter.ai/api
+      base-url: http://127.0.0.1:1234
       chat:
         options:
           model: inclusionai/ring-2.6-1t:free
