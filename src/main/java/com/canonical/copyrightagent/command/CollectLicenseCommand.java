@@ -149,9 +149,8 @@ public class CollectLicenseCommand {
                 sb.append("\n");
             }
         }
-        return licenseExtractor.extractLicense(sb.toString());
+        return licenseExtractor.extractLicense(sb.toString(), fileContent.length());
     }
-
 
     private String normalizeLicense(String licenseText) {
         return licenseText.replaceAll("[^a-zA-Z0-9]", "");

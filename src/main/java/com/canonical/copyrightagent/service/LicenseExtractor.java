@@ -24,7 +24,7 @@ public class LicenseExtractor {
         var sysPromptString = systemPrompt.getContentAsString(Charset.defaultCharset());
         //var model = service.createModel("liquid/lfm-2-24b-a2b");
         //var model = service.createModel("meta-llama/llama-3.1-8b-instruct");
-        var model = service.createModel("google/gemma-4-e4b");
+        var model = service.createModel("qwen/qwen3.5-9b");
         //var model = service.createModel("nvidia/nemotron-3-nano-4b");
         ChatMemory chatMemory = MessageWindowChatMemory.builder().build();
 
@@ -35,17 +35,7 @@ public class LicenseExtractor {
                 .build();
     }
 
-    public LicenseInfo extractLicense(String licenseData) {
-        StringBuilder sb = new StringBuilder();
-        ArrayList<String> comments = extractor.extractComments(fileContent);
-        if (comments.isEmpty()) {
-            sb.append(fileContent.substring(0, MAX_LICENSE_LENGTH));
-        } else {
-            for (var c : comments) {
-                sb.append(c);
-                sb.append("\n");
-            }
-        }
+    public LicenseInfo extractLicense(String licenseData, long length) {
         Prompt p =
                 new Prompt(licenseData);
         var chatResponse = chatClient.prompt(p)
@@ -62,7 +52,7 @@ public class LicenseExtractor {
             String licenseText = ret.get("spdx");
             String holderText = ret.get("copyright");
             var yearsText = ret.get("years");
-            boolean full = fileContent.length() - 10 < licenseText.length() + holderText.length() + yearsText.length();
+            boolean full = length - 10 < licenseText.length() + holderText.length() + yearsText.length();
             return new LicenseInfo(licenseText, holderText, yearsText, full);
         }
         catch (Exception e ){
