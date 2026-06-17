@@ -10,7 +10,6 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 /**
  * The root of the file tree, providing tree-walking and processing.
@@ -65,6 +64,8 @@ public final class RootInfo extends DirInfo {
         Path rootPath = Path.of(options.root);
 
         try {
+            final List<Path> files = new ArrayList<>();
+
             Files.walkFileTree(rootPath, new SimpleFileVisitor<>() {
 
                 // Track which dirs to skip
@@ -95,72 +96,28 @@ public final class RootInfo extends DirInfo {
                         LOG.fine("Ignoring symlink " + fileName);
                         return FileVisitResult.CONTINUE;
                     }
-                    // We'll add files below via the directory scan approach
+                    files.add(file);
                     return FileVisitResult.CONTINUE;
                 }
             });
+            buildTree(tree, rootPath, files);
         } catch (IOException e) {
             LOG.warning("Error walking tree: " + e.getMessage());
         }
-
-        // Use os.walk equivalent - iterate directories top-down
-        buildTree(tree, rootPath, options);
-
         tree.tagIncludedFiles(options);
         return tree;
     }
 
-    private static void buildTree(RootInfo tree, Path rootPath, Options options) {
-        Deque<Path> queue = new ArrayDeque<>();
-        queue.add(rootPath);
-
-        while (!queue.isEmpty()) {
-            Path dir = queue.poll();
-            List<String> subDirs = new ArrayList<>();
-            List<String> files = new ArrayList<>();
-
-            try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
-                for (Path entry : stream) {
-                    String name = entry.getFileName().toString();
-                    BasicFileAttributes attrs;
-                    try {
-                        attrs = Files.readAttributes(entry, BasicFileAttributes.class,
-                                LinkOption.NOFOLLOW_LINKS);
-                    } catch (IOException e) {
-                        continue;
-                    }
-
-                    if (attrs.isDirectory()) {
-                        if (options.excludeDirectoryRe.matcher(name).find()) {
-                            LOG.fine("Ignoring directory " + name);
-                        } else {
-                            subDirs.add(name);
-                            queue.add(entry);
-                        }
-                    } else if (attrs.isSymbolicLink()) {
-                        LOG.fine("Ignoring symlink " + name);
-                    } else if (attrs.isRegularFile()) {
-                        if (options.excludeFileRe.matcher(name).find()) {
-                            LOG.fine("Ignoring file " + name);
-                        } else {
-                            files.add(name);
-                        }
-                    }
-                }
-            } catch (IOException e) {
-                LOG.warning("Cannot read directory " + dir + ": " + e.getMessage());
-                continue;
+    private static void buildTree(RootInfo tree, Path rootPath, List<Path> pathList) {
+        for (Path path : pathList) {
+            Path relative = rootPath.relativize(path);
+            int nameCount = relative.getNameCount();
+            String fileName = relative.getName(nameCount - 1).toString();
+            List<String> dirParts = new ArrayList<>();
+            for (int i = 0; i < nameCount - 1; i++) {
+                dirParts.add(relative.getName(i).toString());
             }
-
-            // Compute relative path from root
-            Path relDir = rootPath.relativize(dir);
-            List<String> relPath = new ArrayList<>();
-            for (int i = 0; i < relDir.getNameCount(); i++) {
-                String part = relDir.getName(i).toString();
-                if (!part.isEmpty()) relPath.add(part);
-            }
-
-            tree.add(relPath, subDirs, files);
+            tree.add(dirParts, Collections.emptyList(), List.of(fileName));
         }
     }
 
