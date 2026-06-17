@@ -27,6 +27,7 @@ dependencies {
 	implementation("org.springframework.ai:spring-ai-starter-mcp-server-webmvc")
 	implementation("org.springframework.shell:spring-shell-starter-jna")
 	implementation("org.apache.tika:tika-core:2.9.1")
+	implementation("com.google.guava:guava:33.6.0-jre")
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testImplementation("org.springframework.shell:spring-shell-test")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
