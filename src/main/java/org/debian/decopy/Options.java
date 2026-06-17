@@ -104,7 +104,7 @@ public class Options {
         this.excludeDirectoryRe = Pattern.compile(DEFAULT_EXCLUDE_DIRECTORY_REGEX,
                 Pattern.COMMENTS | Pattern.MULTILINE);
 
-        if ("-".equals(this.output)) {
+        if ("-".equals(this.output) || this.output == null) {
             this.output = "";
         }
 
