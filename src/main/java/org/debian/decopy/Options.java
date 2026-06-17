@@ -80,7 +80,7 @@ public class Options {
         this.jobs = jobs;
         this.output = output;
         this.root = root;
-        this.files = files;
+        this.files = new ArrayList<>();
 
         Level logLevel;
         if (this.debug) {
@@ -112,6 +112,12 @@ public class Options {
         this.root = Path.of(this.root).toAbsolutePath().normalize().toString();
 
         // Process positional files
+        if (files != null) {
+            addFiles(files);
+        }
+    }
+
+    private void addFiles(List<String> files) {
         for (String f : files) {
             Path p = Path.of(f);
             if (!p.isAbsolute()) {
