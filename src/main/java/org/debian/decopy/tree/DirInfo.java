@@ -39,7 +39,7 @@ public class DirInfo extends FileInfo {
         total += dirs.size() + files.size();
 
         if (!path.isEmpty()) {
-            String name = path.get(0);
+            String name = path.getFirst();
             fileList.computeIfAbsent(name, n -> new DirInfo(this, n));
             DirInfo subDir = (DirInfo) fileList.get(name);
             subDir.add(path.subList(1, path.size()), dirs, files);
