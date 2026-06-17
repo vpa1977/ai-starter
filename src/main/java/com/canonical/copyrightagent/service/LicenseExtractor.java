@@ -1,6 +1,7 @@
 package com.canonical.copyrightagent.service;
 
 import com.canonical.copyrightagent.model.LicenseInfo;
+import org.debian.decopy.matchers.LicenseMatcher;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
@@ -35,28 +36,38 @@ public class LicenseExtractor {
                 .build();
     }
 
-    public LicenseInfo extractLicense(String licenseData, long length) {
-        Prompt p =
-                new Prompt(licenseData);
-        var chatResponse = chatClient.prompt(p)
-                .call().chatResponse();
-        var license = chatResponse.getResult().getOutput().getText();
-        if (license == null || "NO".equals(license) || "\nNO\n".equals(license)) {
-            return new LicenseInfo(null, null, null, false);
+    /**
+     * Returns first found license in the comment block
+     * @param licenseCommentData
+     * @param length
+     * @return
+     */
+    public LicenseInfo extractLicense(String licenseCommentData, long length) {
+        var foundLicenses = LicenseMatcher.findLicenses(licenseCommentData);
+        for (var licenseData  : foundLicenses.keySet()) {
+            Prompt p =
+                    new Prompt(licenseData);
+            var chatResponse = chatClient.prompt(p)
+                    .call().chatResponse();
+            var license = chatResponse.getResult().getOutput().getText();
+            if (license == null || "NO".equals(license) || "\nNO\n".equals(license)) {
+                return new LicenseInfo(null, null, null, false);
+            }
+            license = license.replace("```yaml", "")
+                    .replace("```", "")
+                    .replace("---", "");
+            try {
+                Map<String, String> ret = new Yaml().load(license);
+                String licenseText = ret.get("spdx");
+                String holderText = ret.get("copyright");
+                var yearsText = ret.get("years");
+                boolean full = length - 10 < licenseText.length() + holderText.length() + yearsText.length();
+                return new LicenseInfo(licenseText, holderText, yearsText, full);
+            }
+            catch (Exception e ){
+                return new LicenseInfo(null, null, null, false);
+            }
         }
-        license = license.replace("```yaml", "")
-                .replace("```", "")
-                .replace("---", "");
-        try {
-            Map<String, String> ret = new Yaml().load(license);
-            String licenseText = ret.get("spdx");
-            String holderText = ret.get("copyright");
-            var yearsText = ret.get("years");
-            boolean full = length - 10 < licenseText.length() + holderText.length() + yearsText.length();
-            return new LicenseInfo(licenseText, holderText, yearsText, full);
-        }
-        catch (Exception e ){
-            return new LicenseInfo(null, null, null, false);
-        }
+        return new LicenseInfo(null, null, null, false);
     }
 }
