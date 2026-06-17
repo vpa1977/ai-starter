@@ -1,7 +1,6 @@
 package org.debian.decopy.tree;
 
 import org.debian.decopy.Options;
-
 import java.util.*;
 import java.util.concurrent.Future;
 import java.util.logging.Logger;
@@ -79,13 +78,7 @@ public class DirInfo extends FileInfo {
         return "Unknown";
     }
 
-    public Map<String, FileInfo> getFileList() { return fileList; }
-
-    public int getTotal() { return total; }
-
-    public Set<Future<FileInfo>> getTasks() { return tasks; }
     public void addTask(Future<FileInfo> task) { tasks.add(task); }
-    public void clearTasks() { tasks.clear(); }
 
     /** Depth-first iterator over this directory and all children */
     public Iterable<FileInfo> walk() {
