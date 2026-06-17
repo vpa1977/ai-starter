@@ -15,6 +15,7 @@ public class DirInfo extends FileInfo {
     protected final Map<String, FileInfo> fileList = new LinkedHashMap<>();
     protected int total = 0;
     protected Set<Future<FileInfo>> tasks = new HashSet<>();
+    private List<FileInfo> walkResult = null;
 
     public DirInfo(DirInfo parent, String name) {
         super(parent, name);
@@ -36,6 +37,7 @@ public class DirInfo extends FileInfo {
     }
 
     public void add(List<String> path, List<String> dirs, List<String> files) {
+        walkResult = null;
         total += dirs.size() + files.size();
 
         if (!path.isEmpty()) {
@@ -81,10 +83,12 @@ public class DirInfo extends FileInfo {
     public void addTask(Future<FileInfo> task) { tasks.add(task); }
 
     /** Depth-first iterator over this directory and all children */
-    public Iterable<FileInfo> walk() {
-        List<FileInfo> result = new ArrayList<>();
-        collectAll(result);
-        return result;
+    public List<FileInfo> walk() {
+        if (walkResult == null) {
+            walkResult = new ArrayList<>();
+            collectAll(walkResult);
+        }
+        return walkResult;
     }
 
     protected void collectAll(List<FileInfo> result) {

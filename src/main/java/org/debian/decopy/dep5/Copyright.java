@@ -151,41 +151,34 @@ public final class Copyright {
      */
     public void process(RootInfo filetree) {
         // Collect all file names
-        List<String> allNames = new ArrayList<>();
-        for (String n : filetree.getNames()) {
-            allNames.add(n);
-        }
+        List<FileInfo> allFiles = filetree.walk();
 
         // Process in reverse so later paragraphs (lower index after reverse) win
-        List<Map.Entry<Group, Set<String>>> filesGroups = new ArrayList<>();
+        List<Map.Entry<Group, Set<FileInfo>>> filesGroups = new ArrayList<>();
 
         List<Group> reversed = new ArrayList<>(groups);
         Collections.reverse(reversed);
 
         for (Group group : reversed) {
             List<String> matchedPatterns = new ArrayList<>();
-            Set<String> matchedFiles = new LinkedHashSet<>();
+            Set<FileInfo> matchedFiles = new LinkedHashSet<>();
 
             StoredParagraph stored = group.getStored();
             if (stored == null) continue;
 
             String filesField = stored.get("Files");
-            List<String> patterns = new ArrayList<>();
-            for (String line : filesField.split("\n")) {
-                String t = line.trim();
-                if (!t.isEmpty()) patterns.add(t);
-            }
-
+            List<String> patterns = Arrays.stream(filesField.split("\n")).filter( x -> !x.isEmpty()).toList();;
             for (String pattern : patterns) {
                 boolean found = false;
-                for (String name : allNames) {
+                for (FileInfo fi : allFiles) {
+
                     try {
-                        FileInfo fi = filetree.getByPath(name);
+                        String name = fi.toString();
                         if (fi.getMatchingPattern() != null) continue;
                         if (matchesGlob(pattern, name)) {
                             fi.setMatchingPattern(pattern);
                             if (!(fi instanceof DirInfo)) {
-                                matchedFiles.add(name);
+                                matchedFiles.add(fi);
                             }
                             if (!found) {
                                 matchedPatterns.add(pattern);
@@ -209,20 +202,18 @@ public final class Copyright {
             filesGroups.add(Map.entry(group, matchedFiles));
         }
 
-        processGroups(filetree, filesGroups);
+        processGroups(filesGroups);
     }
 
-    private void processGroups(RootInfo filetree,
-                                List<Map.Entry<Group, Set<String>>> filesGroups) {
+    private void processGroups(List<Map.Entry<Group, Set<FileInfo>>> filesGroups) {
         List<Group> newGroups = new ArrayList<>();
 
-        for (Map.Entry<Group, Set<String>> entry : filesGroups) {
+        for (var entry : filesGroups) {
             Group group = entry.getKey();
-            Set<String> files = entry.getValue();
+            var files = entry.getValue();
 
-            for (String filename : files) {
+            for (var fi : files) {
                 try {
-                    FileInfo fi = filetree.getByPath(filename);
                     fi.setStoredGroup(group);
                     group.addFile(fi);
                 } catch (NoSuchElementException e) {

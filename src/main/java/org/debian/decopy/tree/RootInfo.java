@@ -33,14 +33,6 @@ public final class RootInfo extends DirInfo {
 
     public String getRoot() { return root; }
 
-    public Iterable<String> getNames() {
-        List<String> names = new ArrayList<>();
-        for (FileInfo fi : walk()) {
-            names.add(fi.toString());
-        }
-        return names;
-    }
-
     public FileInfo getByPath(String key) {
         if (key == null || key.isEmpty() || ".".equals(key)) return this;
         String[] parts = key.split("/");
@@ -144,84 +136,84 @@ public final class RootInfo extends DirInfo {
         int workers = options.jobs > 0 ? options.jobs :
                 8;
 
-        ExecutorService executor = Executors.newFixedThreadPool(workers);
-        Set<Future<FileInfo>> tasks = new HashSet<>();
-        Set<DirInfo> dirsWithLicenses = new HashSet<>();
+        try (ExecutorService executor = Executors.newFixedThreadPool(workers)) {
+            Set<Future<FileInfo>> tasks = new HashSet<>();
+            Set<DirInfo> dirsWithLicenses = new HashSet<>();
 
-        int processed = 0;
-        int total = this.total;
+            int processed = 0;
+            int total = this.total;
 
-        try {
-            for (FileInfo item : walk()) {
-                if (item instanceof DirInfo) continue;
-                if (!item.isIncluded()) continue;
+            try {
+                for (FileInfo item : walk()) {
+                    if (item instanceof DirInfo) continue;
+                    if (!item.isIncluded()) continue;
 
-                String root = this.root;
-                Options opts = options;
-                Future<FileInfo> task = executor.submit(() -> {
-                    processFileLicenses(item, root, opts);
-                    return item;
-                });
+                    String root = this.root;
+                    Future<FileInfo> task = executor.submit(() -> {
+                        processFileLicenses(item, root, options);
+                        return item;
+                    });
 
-                boolean isLicenseFile = false;
-                for (Pattern p : KNOWN_LICENSE_FILENAMES) {
-                    if (p.matcher(item.getName()).find()) {
-                        isLicenseFile = true;
-                        break;
+                    boolean isLicenseFile = false;
+                    for (Pattern p : KNOWN_LICENSE_FILENAMES) {
+                        if (p.matcher(item.getName()).find()) {
+                            isLicenseFile = true;
+                            break;
+                        }
+                    }
+
+                    if (isLicenseFile && item.getParent() != null) {
+                        item.getParent().addTask(task);
+                        dirsWithLicenses.add(item.getParent());
+                    } else {
+                        tasks.add(task);
+                    }
+
+                    processed++;
+                    if (options.progress && total > 0 && processed % 100 == 0) {
+                        printProgress("Processing", processed, total);
+                        for (Future<FileInfo> t : tasks) {
+                            try {
+                                t.get();
+                            } catch (ExecutionException e) {
+                                LOG.warning("Error processing file: " + e.getCause().getMessage());
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            }
+                        }
+                        tasks.clear();
                     }
                 }
 
-                if (isLicenseFile && item.getParent() != null) {
-                    item.getParent().addTask(task);
-                    dirsWithLicenses.add(item.getParent());
-                } else {
+                // Process directories with license files
+                total = dirsWithLicenses.size();
+                processed = 0;
+                for (DirInfo dirInfo : dirsWithLicenses) {
+                    Future<FileInfo> task = executor.submit(() -> {
+                        dirInfo.processLicensesFromTasks();
+                        return dirInfo;
+                    });
                     tasks.add(task);
-                }
-
-                processed++;
-                if (options.progress && total > 0 && processed % 100 == 0) {
-                    printProgress("Processing", processed, total);
-                    for (Future<FileInfo> t : tasks) {
-                        try {
-                            t.get();
-                        } catch (ExecutionException e) {
-                            LOG.warning("Error processing file: " + e.getCause().getMessage());
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
+                    processed++;
+                    if (options.progress && processed % 100 == 0) {
+                        printProgress("Processing dir", processed, total);
+                        for (Future<FileInfo> t : tasks) {
+                            try {
+                                t.get();
+                            } catch (ExecutionException e) {
+                                LOG.warning("Error processing file: " + e.getCause().getMessage());
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            }
                         }
+                        tasks.clear();
                     }
-                    tasks.clear();
                 }
+
+
+            } finally {
+                executor.shutdown();
             }
-
-            // Process directories with license files
-            total = dirsWithLicenses.size();
-            processed = 0;
-            for (DirInfo dirInfo : dirsWithLicenses) {
-                Future<FileInfo> task = executor.submit(() -> {
-                    dirInfo.processLicensesFromTasks();
-                    return dirInfo;
-                });
-                tasks.add(task);
-                processed++;
-                if (options.progress && processed % 100 == 0) {
-                    printProgress("Processing dir", processed, total);
-                    for (Future<FileInfo> t : tasks) {
-                        try {
-                            t.get();
-                        } catch (ExecutionException e) {
-                            LOG.warning("Error processing file: " + e.getCause().getMessage());
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-                    tasks.clear();
-                }
-            }
-
-
-        } finally {
-            executor.shutdown();
         }
     }
 
