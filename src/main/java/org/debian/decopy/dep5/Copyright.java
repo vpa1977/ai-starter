@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.util.*;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Represents the entire debian/copyright file, managing file groups.
@@ -72,23 +73,24 @@ public final class Copyright {
         hdr.setFormat(headerFields.getOrDefault("Format", CURRENT_FORMAT));
         hdr.setSource(headerFields.getOrDefault("Source", ""));
         hdr.setComment(headerFields.getOrDefault("Comment", ""));
-        for (Map.Entry<String, String> e : headerFields.entrySet()) {
-            String k = e.getKey();
-            if (!k.equals("Format") && !k.equals("Source") && !k.equals("Comment")) {
-                hdr.getExtraFields().put(k, e.getValue());
-            }
-        }
+
+        var excluded = new HashSet<>(Arrays.asList("Format", "Source", "Comment"));
+        var extraFields = headerFields
+                .entrySet()
+                .stream()
+                .filter( k -> excluded.contains(k.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        hdr.getExtraFields().putAll(extraFields);
         result.header = hdr;
 
         // Remaining paragraphs: Files or License paragraphs
-        for (int i = 1; i < paragraphs.size(); i++) {
-            Map<String, String> p = paragraphs.get(i);
+        for (var p : paragraphs) {
             if (p.containsKey("Files")) {
-                result.groups.add(parseFilesGroup(p, i - 1));
+                result.groups.add(parseFilesGroup(p, result.groups.size()));
             } else if (p.containsKey("License")) {
                 // A standalone license paragraph - set the stored text
-                String licName = p.get("License").split("\n")[0].trim();
                 String fullText = p.get("License");
+                String licName = fullText.split("\n")[0].trim();
                 License lic = License.get(licName);
                 if (!lic.hasStoredText()) {
                     lic.setStoredText("License: " + fullText);
@@ -96,7 +98,6 @@ public final class Copyright {
                 result.licenseParagraphs.add(new StoredParagraph(p));
             }
         }
-
         return result;
     }
 
@@ -156,7 +157,6 @@ public final class Copyright {
         }
 
         // Process in reverse so later paragraphs (lower index after reverse) win
-        List<Group> validGroups = new ArrayList<>();
         List<Map.Entry<Group, Set<String>>> filesGroups = new ArrayList<>();
 
         List<Group> reversed = new ArrayList<>(groups);
